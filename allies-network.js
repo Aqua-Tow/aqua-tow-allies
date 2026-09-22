@@ -137,6 +137,55 @@ function isAvailableNow(ally){
   return nowHour >= timeToHours(today.start) && nowHour < timeToHours(today.end);
 }
 
+// Pins are colored by real-time status, not by Ally identity — green means
+// "reach out right now," red means "off-hours, but here's when they're back."
+// This is what lets someone who broke down overnight tell at a glance which
+// nearby Allies can actually help immediately.
+const PIN_COLOR_AVAILABLE = '#2f9e5c';
+const PIN_COLOR_UNAVAILABLE = '#c0392b';
+function pinColorFor(ally){ return isAvailableNow(ally) ? PIN_COLOR_AVAILABLE : PIN_COLOR_UNAVAILABLE; }
+
+// How long until an Ally who's currently off-hours opens back up — the whole
+// point being that someone stranded overnight can see "back in ~6 hrs"
+// instead of just "not available" and having no idea whether to wait it out.
+// Scans today plus the next 7 days for the next day/time their schedule
+// turns on; returns null only in the pathological case where no day is ever
+// on (the signup form requires at least one, so this shouldn't occur live).
+function nextAvailableInfo(ally){
+  const now = new Date();
+  for(let dayOffset=0; dayOffset<8; dayOffset++){
+    const d = new Date(now);
+    d.setDate(d.getDate() + dayOffset);
+    const dayIdx = (d.getDay()+6) % 7;
+    const sch = ally.schedule[dayIdx];
+    if(!sch || !sch.on) continue;
+    const startHour = sch.all24 ? 0 : timeToHours(sch.start);
+    if(dayOffset===0){
+      const nowHour = now.getHours() + now.getMinutes()/60;
+      if(nowHour >= startHour) continue; // today's window already started (and, since we're only
+                                          // called when NOT available now, must have already ended)
+    }
+    const avail = new Date(d);
+    avail.setHours(Math.floor(startHour), Math.round((startHour%1)*60), 0, 0);
+    return { minutes: Math.round((avail - now) / 60000), date: avail };
+  }
+  return null;
+}
+
+// A friendly readout for the wait: "Available in 40 min" / "~6 hrs" for
+// anything under a day, otherwise a day name + time ("Available Tue 7am").
+function formatWaitLabel(ally){
+  if(isAvailableNow(ally)) return 'Available now';
+  const info = nextAvailableInfo(ally);
+  if(!info) return 'Not currently available';
+  const hours = info.minutes / 60;
+  if(hours < 1) return `Available in ${Math.max(1,info.minutes)} min`;
+  if(hours < 20){ const h = Math.round(hours); return `Available in ~${h} hr${h!==1?'s':''}`; }
+  const dayName = info.date.toLocaleDateString('en-US',{weekday:'long'});
+  const timeStr = formatTime12(`${String(info.date.getHours()).padStart(2,'0')}:${String(info.date.getMinutes()).padStart(2,'0')}`);
+  return `Available ${dayName} at ${timeStr}`;
+}
+
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
@@ -212,14 +261,20 @@ function ensureFindMap(){
 }
 
 function allyPopupHtml(a){
-  const chips = [
+  const availableNow = isAvailableNow(a);
+  const chips = availableNow ? [
     a.contact.includes('call') ? `<span class="ap-chip">${phoneIcon()} Calls ok</span>` : '',
     a.contact.includes('text') ? `<span class="ap-chip">${textIcon()} Texts ok</span>` : '',
-  ].join('');
-  const actions = [
+  ].join('') : '';
+  const actions = availableNow ? [
     a.contact.includes('call') ? `<a class="call" href="tel:${a.phone}">${phoneIcon()} Call</a>` : '',
     a.contact.includes('text') ? `<a class="text" href="sms:${a.phone}">${textIcon()} Text</a>` : '',
-  ].join('');
+  ].join('') : '';
+  const contactSection = availableNow
+    ? `<div class="ap-chip-label" style="margin-top:10px;">Ways to reach ${a.name.split(' ')[0]}</div>
+       <div class="ap-chips">${chips}</div>
+       <div class="ap-actions">${actions}</div>`
+    : `<div class="note" style="margin-top:10px;">Contact info is hidden while off-hours &mdash; ${formatWaitLabel(a).toLowerCase()}, or look for another Ally showing green nearby.</div>`;
   return `<div class="ally-popup">
     <div class="ap-head">
       <div class="ap-avatar" style="background:${a.color}">${a.initials}</div>
@@ -232,11 +287,10 @@ function allyPopupHtml(a){
     ${a.bio ? `<div class="ap-bio">${a.bio}</div>` : ''}
     <div class="ap-divider"></div>
     <div class="ap-row">${clockIcon()}<div><b>Typically available</b><span>${allySchedulePhrase(a)}</span></div></div>
+    <div style="margin-top:6px;font-weight:700;font-size:.82rem;color:${availableNow ? 'var(--good)' : 'var(--pending)'};">${availableNow ? 'Available now' : formatWaitLabel(a)}</div>
     <div class="ap-chip-label">Services offered</div>
     <div class="ap-chips">${servicesForKits(a.kits).map(s=>`<span class="ap-chip">${(SERVICE_ICONS[s]||boatIcon)()} ${s}</span>`).join('')}</div>
-    <div class="ap-chip-label" style="margin-top:10px;">Ways to reach ${a.name.split(' ')[0]}</div>
-    <div class="ap-chips">${chips}</div>
-    <div class="ap-actions">${actions}</div>
+    ${contactSection}
     ${typeof a.dist === 'number' ? `<div class="ap-dist">${a.dist.toFixed(1)} mi away &middot; ${a.label}</div>` : `<div class="ap-dist">${a.label}</div>`}
     <div class="ap-foot">Towing help is arranged directly between you and this Ally &mdash; not through Aqua-Tow.</div>
   </div>`;
@@ -253,7 +307,7 @@ function renderAllAlliesOverview(){
   const map = ensureFindMap();
   findMarkersLayer.clearLayers();
   ALLIES.forEach(a=>{
-    L.marker([a.lat, a.lng], {icon: pinDivIcon(a.color)}).addTo(findMarkersLayer).bindPopup(allyPopupHtml(a), {maxWidth:260, minWidth:222});
+    L.marker([a.lat, a.lng], {icon: pinDivIcon(pinColorFor(a))}).addTo(findMarkersLayer).bindPopup(allyPopupHtml(a), {maxWidth:260, minWidth:222});
   });
   setTimeout(()=>{ map.invalidateSize(); map.fitBounds(US_BOUNDS.pad(0.04)); }, 0);
 }
@@ -292,7 +346,7 @@ function renderFindMap(searcher, ranked, zoomRadiusMiles){
   findMarkersLayer.clearLayers();
   L.marker([searcher.lat, searcher.lng], {icon: meDivIcon(), interactive:false, zIndexOffset:1000}).addTo(findMarkersLayer);
   ranked.forEach(a=>{
-    L.marker([a.lat, a.lng], {icon: pinDivIcon(a.color)}).addTo(findMarkersLayer).bindPopup(allyPopupHtml(a), {maxWidth:260, minWidth:222});
+    L.marker([a.lat, a.lng], {icon: pinDivIcon(pinColorFor(a))}).addTo(findMarkersLayer).bindPopup(allyPopupHtml(a), {maxWidth:260, minWidth:222});
   });
   // Always zoom to the computed radius around the search point — even with
   // zero results — so the map visibly moves and confirms the search worked,
@@ -312,38 +366,43 @@ function showResultsFor(latitude, longitude){
   const status=document.getElementById('statusLine'), results=document.getElementById('results');
   const all = ALLIES.map(a=>({...a, dist:haversineMiles(latitude,longitude,a.lat,a.lng)}))
                      .sort((a,b)=>a.dist-b.dist);
-  const available = all.filter(isAvailableNow);
-  const offHours = all.length - available.length;
-  const ranked = available.slice(0,5);
-  status.textContent = ranked.length ? 'Closest available Allies to you:' : 'No Allies are within their available hours right now.';
-  // Zoom radius is based on ALL nearby Allies (not just ones available right
-  // now) so the map reflects real-world density even when some of them are
-  // currently off-hours.
+  // Show the closest Allies regardless of whether they're available right
+  // now — someone who breaks down overnight needs to see everyone nearby and
+  // how long each one's wait is, not just whoever happens to be on-hours
+  // this minute. Contact info stays hidden for anyone currently off-hours
+  // (see allyPopupHtml / the result cards below); the map pin color (green/
+  // red) is the at-a-glance signal for who to reach out to right now.
+  const ranked = all.slice(0,5);
+  const availableCount = ranked.filter(isAvailableNow).length;
+  status.textContent = ranked.length
+    ? (availableCount ? `${availableCount} of the ${ranked.length} closest Allies are available right now:` : 'No Allies nearby are available right now — here\'s who\'s closest and when they\'re back:')
+    : 'No Allies found nearby.';
   const zoomRadius = computeZoomRadiusMiles(latitude, longitude, all);
   renderFindMap({lat:latitude,lng:longitude}, ranked, zoomRadius);
-  results.innerHTML = ranked.map(a=>`
+  results.innerHTML = ranked.map(a=>{
+    const availableNow = isAvailableNow(a);
+    return `
     <div class="result">
-      <div class="badge-pin" style="background:${a.color}">${a.initials}</div>
+      <div class="badge-pin" style="background:${pinColorFor(a)}">${a.initials}</div>
       <div class="info">
         <b>${a.name}</b>
         <span>${a.label}</span>
         <div>
           ${servicesForKits(a.kits).map(s=>`<span class="chip">${s}</span>`).join('')}
-          <span class="chip hours">Available now</span>
+          <span class="chip hours" style="${availableNow ? '' : 'background:color-mix(in srgb, var(--pending) 12%, transparent);color:var(--pending);'}">${availableNow ? 'Available now' : formatWaitLabel(a)}</span>
         </div>
         ${a.bio ? `<div class="bio">${a.bio}</div>` : ''}
+        ${availableNow ? '' : `<div class="bio" style="font-style:normal;">Contact info hidden while off-hours.</div>`}
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
         <div class="dist">${a.dist.toFixed(1)} mi</div>
         <div class="actions">
-          ${a.contact.includes('call') ? `<a href="tel:${a.phone}" title="Call">${phoneIcon()}</a>` : ''}
-          ${a.contact.includes('text') ? `<a href="sms:${a.phone}" title="Text">${textIcon()}</a>` : ''}
+          ${availableNow && a.contact.includes('call') ? `<a href="tel:${a.phone}" title="Call">${phoneIcon()}</a>` : ''}
+          ${availableNow && a.contact.includes('text') ? `<a href="sms:${a.phone}" title="Text">${textIcon()}</a>` : ''}
         </div>
       </div>
-    </div>`).join('');
-  if(offHours > 0){
-    results.innerHTML += `<div class="filtered-note">${offHours} more Ally${offHours>1?'ies':''} nearby, but outside their available hours right now.</div>`;
-  }
+    </div>`;
+  }).join('');
 }
 
 document.getElementById('locateBtn').addEventListener('click', ()=>{
