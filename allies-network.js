@@ -198,8 +198,6 @@ function dropletIcon(){
 }
 const SERVICE_ICONS = { 'Towing': boatIcon, 'Jump Start': boltIcon, 'Pump Out': dropletIcon };
 
-document.getElementById('areaSuggestions').innerHTML = KNOWN_AREAS.map(a=>`<option value="${a.label}">`).join('');
-
 // Roughly the lower-48: used as the default "browse the whole map" view,
 // and as a fallback if a device's viewport is unusually shaped.
 const US_BOUNDS = L.latLngBounds([[24.5, -125], [49.5, -66.9]]);
@@ -260,23 +258,47 @@ function renderAllAlliesOverview(){
   setTimeout(()=>{ map.invalidateSize(); map.fitBounds(US_BOUNDS.pad(0.04)); }, 0);
 }
 
-function renderFindMap(searcher, ranked){
+// How far out the map zooms after a search. Default/max is 200 miles — far
+// enough that a search always reads as "successful" even in an area with no
+// Allies nearby at all. It zooms in tighter than that when Allies are
+// clustered close together, but never tighter than the distance needed to
+// include at least the 5 closest ones (so a dense area doesn't zoom in so
+// far it hides Allies just a few miles further out).
+const SEARCH_ZOOM_MAX_MILES = 200;
+const SEARCH_ZOOM_MIN_ALLY_COUNT = 5;
+const SEARCH_ZOOM_FLOOR_MILES = 5; // don't zoom in so tight the map is useless
+
+function computeZoomRadiusMiles(searchLat, searchLng, allies){
+  if(!allies.length) return SEARCH_ZOOM_MAX_MILES;
+  const dists = allies.map(a=>haversineMiles(searchLat, searchLng, a.lat, a.lng)).sort((a,b)=>a-b);
+  const idx = Math.min(SEARCH_ZOOM_MIN_ALLY_COUNT, dists.length) - 1;
+  return Math.max(SEARCH_ZOOM_FLOOR_MILES, Math.min(SEARCH_ZOOM_MAX_MILES, dists[idx]));
+}
+
+// Builds a lat/lng box roughly `radiusMiles` out from a center point (69
+// miles/degree latitude, adjusted for longitude compression at that latitude)
+// — good enough for framing a map view, not for precise geodesy.
+function boundsForRadiusMiles(lat, lng, radiusMiles){
+  const latDelta = radiusMiles / 69;
+  const lngDelta = radiusMiles / (69 * Math.max(0.15, Math.cos(lat * Math.PI/180)));
+  return L.latLngBounds([[lat-latDelta, lng-lngDelta], [lat+latDelta, lng+lngDelta]]);
+}
+
+function renderFindMap(searcher, ranked, zoomRadiusMiles){
   const mapEl = document.getElementById('findMap'), capEl = document.getElementById('findMapCaption');
   mapEl.style.display='block'; capEl.style.display='block';
   document.getElementById('showAllRow').style.display = 'block';
   const map = ensureFindMap();
   findMarkersLayer.clearLayers();
-  if(!ranked.length){
-    setTimeout(()=>{ map.invalidateSize(); }, 0);
-    return;
-  }
-  const bounds = L.latLngBounds([[searcher.lat, searcher.lng]]);
   L.marker([searcher.lat, searcher.lng], {icon: meDivIcon(), interactive:false, zIndexOffset:1000}).addTo(findMarkersLayer);
   ranked.forEach(a=>{
-    bounds.extend([a.lat, a.lng]);
     L.marker([a.lat, a.lng], {icon: pinDivIcon(a.color)}).addTo(findMarkersLayer).bindPopup(allyPopupHtml(a), {maxWidth:260, minWidth:222});
   });
-  setTimeout(()=>{ map.invalidateSize(); map.fitBounds(bounds.pad(0.25)); }, 0);
+  // Always zoom to the computed radius around the search point — even with
+  // zero results — so the map visibly moves and confirms the search worked,
+  // instead of silently staying on whatever view it had before.
+  const bounds = boundsForRadiusMiles(searcher.lat, searcher.lng, zoomRadiusMiles);
+  setTimeout(()=>{ map.invalidateSize(); map.fitBounds(bounds.pad(0.05)); }, 0);
 }
 
 function showResultsFor(latitude, longitude){
@@ -287,7 +309,11 @@ function showResultsFor(latitude, longitude){
   const offHours = all.length - available.length;
   const ranked = available.slice(0,5);
   status.textContent = ranked.length ? 'Closest available Allies to you:' : 'No Allies are within their available hours right now.';
-  renderFindMap({lat:latitude,lng:longitude}, ranked);
+  // Zoom radius is based on ALL nearby Allies (not just ones available right
+  // now) so the map reflects real-world density even when some of them are
+  // currently off-hours.
+  const zoomRadius = computeZoomRadiusMiles(latitude, longitude, all);
+  renderFindMap({lat:latitude,lng:longitude}, ranked, zoomRadius);
   results.innerHTML = ranked.map(a=>`
     <div class="result">
       <div class="badge-pin" style="background:${a.color}">${a.initials}</div>
