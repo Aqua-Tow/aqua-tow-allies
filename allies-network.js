@@ -736,7 +736,14 @@ document.getElementById('pasteLinkBtn').addEventListener('click', ()=>{
   if(!raw){ note.style.display='block'; note.textContent='Paste the link (or just the code) from your email first.'; return; }
   let token = raw;
   try{ const u = new URL(raw); const p = u.searchParams.get('ally'); if(p) token = p; }catch(_e){ /* not a full URL — treat input as the bare token */ }
-  window.location.search = 'ally=' + encodeURIComponent(token);
+  // Load directly instead of reassigning window.location.search — inside
+  // GoDaddy's sandboxed Custom Code iframe, this frame's own location isn't
+  // a real, reloadable page URL, so a reload-based approach wouldn't work.
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+  document.querySelector('.tab[data-tab="join"]').classList.add('active');
+  document.getElementById('panel-join').classList.add('active');
+  loadProfileByToken(token);
 });
 document.getElementById('pasteLinkInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('pasteLinkBtn').click(); } });
 
@@ -824,10 +831,27 @@ document.getElementById('jSubmitBtn').addEventListener('click', ()=>{
   });
 });
 
+// GoDaddy's "Custom Code" embed widget renders this whole page inside a
+// sandboxed iframe (loaded via a javascript:/srcdoc URL, not a normal page
+// load) — so window.location.search here is ALWAYS empty, even though the
+// real browser address bar has the ?ally=<token> the customer actually
+// clicked. The real query string lives on the parent (top-level) page
+// instead. Same-origin, so window.parent.location is reachable; fall back to
+// this frame's own location if that ever isn't true (e.g. previewing this
+// file directly, outside any iframe).
+function getPageSearchParams(){
+  try{
+    if(window.parent && window.parent !== window && window.parent.location && window.parent.location.search){
+      return new URLSearchParams(window.parent.location.search);
+    }
+  }catch(e){ /* cross-origin parent — fall back below */ }
+  return new URLSearchParams(window.location.search);
+}
+
 // Land straight on a person's own profile if they arrived via their emailed
 // link (…?ally=<token>) — otherwise show the "buy first" gate.
 (function initBecomeAllyGate(){
-  const token = new URLSearchParams(window.location.search).get('ally');
+  const token = getPageSearchParams().get('ally');
   if(token){
     document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
