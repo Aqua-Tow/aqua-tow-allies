@@ -296,8 +296,15 @@ function renderFindMap(searcher, ranked, zoomRadiusMiles){
   });
   // Always zoom to the computed radius around the search point — even with
   // zero results — so the map visibly moves and confirms the search worked,
-  // instead of silently staying on whatever view it had before.
+  // instead of silently staying on whatever view it had before. The
+  // density-based radius (zoomRadiusMiles) is based on ALL Allies regardless
+  // of whether they're within their available hours right now, but only
+  // Allies who ARE currently available get pinned (ranked, above) — so a pin
+  // that's actually being shown could in principle sit further away than the
+  // computed radius. Extending the bounds to every ranked marker guarantees
+  // every pin actually drawn on the map is always inside the visible view.
   const bounds = boundsForRadiusMiles(searcher.lat, searcher.lng, zoomRadiusMiles);
+  ranked.forEach(a=>{ bounds.extend([a.lat, a.lng]); });
   setTimeout(()=>{ map.invalidateSize(); map.fitBounds(bounds.pad(0.05)); }, 0);
 }
 
@@ -857,6 +864,14 @@ function getPageSearchParams(){
     document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
     document.querySelector('.tab[data-tab="join"]').classList.add('active');
     document.getElementById('panel-join').classList.add('active');
+    // Landing here directly via a link skips the normal .tab click handler
+    // (further down this file) that would otherwise initialize the join map
+    // — so without this, a brand-new Ally with no saved pin yet (every
+    // first-time signup, before populateForm() has real coordinates to drop
+    // a pin at) sees a permanently blank map box with nothing responding to
+    // clicks or drags.
+    ensureJoinMap();
+    setTimeout(()=>{ if(joinMapInstance) joinMapInstance.invalidateSize(); }, 0);
     loadProfileByToken(token);
   } else {
     showGate();
