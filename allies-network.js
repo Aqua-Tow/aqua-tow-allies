@@ -16,7 +16,7 @@ function servicesForKits(kitPurchasedOrArray){
   const services = [];
   if(set.has('Tow System')) services.push('Towing');
   if(set.has('Jump Kit')) services.push('Jump Start');
-  if(set.has('Pump Kit')) services.push('Pump Out');
+  if(set.has('Pump Kit')) services.push('Dewatering');
   return services;
 }
 
@@ -245,7 +245,7 @@ function boltIcon(){
 function dropletIcon(){
   return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3s6 6.8 6 11a6 6 0 0 1-12 0c0-4.2 6-11 6-11z"/></svg>';
 }
-const SERVICE_ICONS = { 'Towing': boatIcon, 'Jump Start': boltIcon, 'Pump Out': dropletIcon };
+const SERVICE_ICONS = { 'Towing': boatIcon, 'Jump Start': boltIcon, 'Dewatering': dropletIcon };
 
 // Roughly the lower-48: used as the default "browse the whole map" view,
 // and as a fallback if a device's viewport is unusually shaped.
@@ -291,6 +291,32 @@ function allyPopupHtml(a){
   </div>`;
 }
 
+// --- selected-ally detail card ---------------------------------------
+// A Leaflet popup is confined inside the map's own box (.map-wrap has a
+// fixed aspect-ratio and overflow:hidden), which on a phone-sized map is
+// often shorter than a full Ally card — cutting contact info off with no
+// way to scroll to see it. Instead, tapping a pin renders the same details
+// into a normal element right below the map, which scrolls with the rest
+// of the page and has no height limit at all.
+function allySelectedCardHtml(a){
+  return `<button type="button" class="ally-detail-close" id="allyDetailCloseBtn" aria-label="Close">&times;</button>${allyPopupHtml(a)}`;
+}
+function showSelectedAlly(a){
+  const card = document.getElementById('selectedAllyCard');
+  card.innerHTML = allySelectedCardHtml(a);
+  card.style.display = 'block';
+  document.getElementById('allyDetailCloseBtn').addEventListener('click', hideSelectedAlly);
+  card.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+function hideSelectedAlly(){
+  document.getElementById('selectedAllyCard').style.display = 'none';
+}
+function addAllyMarker(a){
+  const marker = L.marker([a.lat, a.lng], {icon: pinDivIcon(pinColorFor(a))}).addTo(findMarkersLayer);
+  marker.on('click', ()=>showSelectedAlly(a));
+  return marker;
+}
+
 // Default landing view: the whole map, every active Ally pinned, so someone
 // can just pan and zoom to their own stretch of water before ever searching.
 function renderAllAlliesOverview(){
@@ -298,12 +324,11 @@ function renderAllAlliesOverview(){
   document.getElementById('findMapCaption').style.display = 'block';
   document.getElementById('showAllRow').style.display = 'none';
   document.getElementById('results').innerHTML = '';
+  hideSelectedAlly();
   document.getElementById('statusLine').textContent = 'Showing every active Ally — pan and zoom the map, or tap a pin for details.';
   const map = ensureFindMap();
   findMarkersLayer.clearLayers();
-  ALLIES.forEach(a=>{
-    L.marker([a.lat, a.lng], {icon: pinDivIcon(pinColorFor(a))}).addTo(findMarkersLayer).bindPopup(allyPopupHtml(a), {maxWidth:260, minWidth:222});
-  });
+  ALLIES.forEach(a=>{ addAllyMarker(a); });
   setTimeout(()=>{ map.invalidateSize(); map.fitBounds(US_BOUNDS.pad(0.04)); }, 0);
 }
 
@@ -343,12 +368,11 @@ function renderFindMap(searcher, ranked, zoomRadiusMiles){
   const mapEl = document.getElementById('findMap'), capEl = document.getElementById('findMapCaption');
   mapEl.style.display='block'; capEl.style.display='block';
   document.getElementById('showAllRow').style.display = 'block';
+  hideSelectedAlly();
   const map = ensureFindMap();
   findMarkersLayer.clearLayers();
   L.marker([searcher.lat, searcher.lng], {icon: meDivIcon(), interactive:false, zIndexOffset:1000}).addTo(findMarkersLayer);
-  ranked.forEach(a=>{
-    L.marker([a.lat, a.lng], {icon: pinDivIcon(pinColorFor(a))}).addTo(findMarkersLayer).bindPopup(allyPopupHtml(a), {maxWidth:260, minWidth:222});
-  });
+  ranked.forEach(a=>{ addAllyMarker(a); });
   // Always zoom to the computed radius around the search point — even with
   // zero results — so the map visibly moves and confirms the search worked,
   // instead of silently staying on whatever view it had before. Every pin
