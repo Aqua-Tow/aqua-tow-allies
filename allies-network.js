@@ -312,15 +312,21 @@ function renderAllAlliesOverview(){
   setTimeout(()=>{ map.invalidateSize(); map.fitBounds(US_BOUNDS.pad(0.04)); }, 0);
 }
 
-// How far out the map zooms after a search. Default/max is 200 miles — far
-// enough that a search always reads as "successful" even in an area with no
-// Allies nearby at all. It zooms in tighter than that when Allies are
-// clustered close together, but never tighter than the distance needed to
-// include at least the 5 closest ones (so a dense area doesn't zoom in so
-// far it hides Allies just a few miles further out).
+// 200 miles is a hard cap, not just a default zoom level: an Ally farther
+// away than this is never shown as a search result at all, no matter how
+// few (or zero) Allies are actually nearby. Without this cap, someone
+// searching a remote area would see whoever's "closest" even if that's
+// 900+ miles off, and could end up calling a total stranger clear across
+// the country by mistake. If nobody is within 200 miles, the map still
+// zooms out to the full 200-mile view (centered on the searcher) so the
+// search visibly worked — it just shows no pins. It zooms in tighter than
+// that when Allies are clustered close together, but never tighter than
+// the distance needed to include at least the 5 closest ones, so a dense
+// area doesn't zoom in so far it hides Allies just a few miles further out.
 const SEARCH_ZOOM_MAX_MILES = 200;
 const SEARCH_ZOOM_MIN_ALLY_COUNT = 5;
 const SEARCH_ZOOM_FLOOR_MILES = 5; // don't zoom in so tight the map is useless
+const SEARCH_MAX_SHOWN = 10; // never list/pin more than this many at once
 
 function computeZoomRadiusMiles(searchLat, searchLng, allies){
   if(!allies.length) return SEARCH_ZOOM_MAX_MILES;
@@ -350,13 +356,10 @@ function renderFindMap(searcher, ranked, zoomRadiusMiles){
   });
   // Always zoom to the computed radius around the search point — even with
   // zero results — so the map visibly moves and confirms the search worked,
-  // instead of silently staying on whatever view it had before. The
-  // density-based radius (zoomRadiusMiles) is based on ALL Allies regardless
-  // of whether they're within their available hours right now, but only
-  // Allies who ARE currently available get pinned (ranked, above) — so a pin
-  // that's actually being shown could in principle sit further away than the
-  // computed radius. Extending the bounds to every ranked marker guarantees
-  // every pin actually drawn on the map is always inside the visible view.
+  // instead of silently staying on whatever view it had before. Every pin
+  // handed in here is already within the 200-mile cap (see showResultsFor),
+  // so extending the bounds to include each one is just a safety net for
+  // rounding, never a way to pull in someone far outside that range.
   const bounds = boundsForRadiusMiles(searcher.lat, searcher.lng, zoomRadiusMiles);
   ranked.forEach(a=>{ bounds.extend([a.lat, a.lng]); });
   setTimeout(()=>{ map.invalidateSize(); map.fitBounds(bounds.pad(0.05)); }, 0);
@@ -366,18 +369,22 @@ function showResultsFor(latitude, longitude){
   const status=document.getElementById('statusLine'), results=document.getElementById('results');
   const all = ALLIES.map(a=>({...a, dist:haversineMiles(latitude,longitude,a.lat,a.lng)}))
                      .sort((a,b)=>a.dist-b.dist);
-  // Show the closest Allies regardless of whether they're available right
-  // now — someone who breaks down overnight needs to see everyone nearby and
-  // how long each one's wait is, not just whoever happens to be on-hours
-  // this minute. Contact info stays hidden for anyone currently off-hours
-  // (see allyPopupHtml / the result cards below); the map pin color (green/
-  // red) is the at-a-glance signal for who to reach out to right now.
-  const ranked = all.slice(0,5);
+  // Hard 200-mile cap: an Ally farther away than this is never shown as a
+  // result, available or not — see the SEARCH_ZOOM_MAX_MILES comment above.
+  const withinRange = all.filter(a=>a.dist <= SEARCH_ZOOM_MAX_MILES);
+  // Within that range, show the closest Allies regardless of whether
+  // they're available right now — someone who breaks down overnight needs
+  // to see everyone nearby and how long each one's wait is, not just
+  // whoever happens to be on-hours this minute. Contact info stays hidden
+  // for anyone currently off-hours (see allyPopupHtml / the result cards
+  // below); the map pin color (green/red) is the at-a-glance signal for who
+  // to reach out to right now.
+  const ranked = withinRange.slice(0, SEARCH_MAX_SHOWN);
   const availableCount = ranked.filter(isAvailableNow).length;
   status.textContent = ranked.length
-    ? (availableCount ? `${availableCount} of the ${ranked.length} closest Allies are available right now:` : 'No Allies nearby are available right now — here\'s who\'s closest and when they\'re back:')
-    : 'No Allies found nearby.';
-  const zoomRadius = computeZoomRadiusMiles(latitude, longitude, all);
+    ? (availableCount ? `${availableCount} of the ${ranked.length} closest Allies (within ${SEARCH_ZOOM_MAX_MILES} mi) are available right now:` : `No Allies within ${SEARCH_ZOOM_MAX_MILES} mi are available right now — here's who's closest and when they're back:`)
+    : `No Allies within ${SEARCH_ZOOM_MAX_MILES} miles yet.`;
+  const zoomRadius = computeZoomRadiusMiles(latitude, longitude, withinRange);
   renderFindMap({lat:latitude,lng:longitude}, ranked, zoomRadius);
   results.innerHTML = ranked.map(a=>{
     const availableNow = isAvailableNow(a);
