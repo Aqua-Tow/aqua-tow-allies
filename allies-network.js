@@ -262,17 +262,12 @@ function ensureFindMap(){
 
 function allyPopupHtml(a){
   const availableNow = isAvailableNow(a);
-  const chips = availableNow ? [
-    a.contact.includes('call') ? `<span class="ap-chip">${phoneIcon()} Calls ok</span>` : '',
-    a.contact.includes('text') ? `<span class="ap-chip">${textIcon()} Texts ok</span>` : '',
-  ].join('') : '';
   const actions = availableNow ? [
     a.contact.includes('call') ? `<a class="call" href="tel:${a.phone}">${phoneIcon()} Call</a>` : '',
     a.contact.includes('text') ? `<a class="text" href="sms:${a.phone}">${textIcon()} Text</a>` : '',
   ].join('') : '';
   const contactSection = availableNow
     ? `<div class="ap-chip-label" style="margin-top:10px;">Ways to reach ${a.name.split(' ')[0]}</div>
-       <div class="ap-chips">${chips}</div>
        <div class="ap-actions">${actions}</div>`
     : `<div class="note" style="margin-top:10px;">Contact info is hidden while off-hours &mdash; ${formatWaitLabel(a).toLowerCase()}, or look for another Ally showing green nearby.</div>`;
   return `<div class="ally-popup">
