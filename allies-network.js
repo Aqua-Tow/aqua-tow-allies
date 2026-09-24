@@ -44,6 +44,16 @@ function initialsFor(fullName){
 // null for a record that's missing a name or a valid pin location (e.g. a
 // blank in-progress signup row) so it's silently skipped rather than
 // crashing the map.
+// Airtable hands attachment fields back as an array of file objects (or
+// nothing, if the field is empty) — this pulls out a reasonably-sized image
+// URL to actually display, preferring the "large" thumbnail over the full
+// original so the popup avatar doesn't download a multi-megabyte photo.
+function firstAttachmentUrl(attachments){
+  if(!Array.isArray(attachments) || !attachments[0]) return '';
+  const a = attachments[0];
+  return (a.thumbnails && a.thumbnails.large && a.thumbnails.large.url) || a.url || '';
+}
+
 function mapAirtableRecordToAlly(rec, idx){
   const name = rec['Full Name'];
   const lat = Number(rec.Latitude), lng = Number(rec.Longitude);
@@ -56,7 +66,8 @@ function mapAirtableRecordToAlly(rec, idx){
     kits, orderNumber: rec['Order Number'] || '', phone: rec.Phone || '',
     lat, lng, label: rec['Location Label'] || '',
     contact, bio: rec.Bio || '', schedule,
-    editToken: rec['Edit Token'] || '', photoType: PHOTO_LABEL_TO_KEY[rec['Photo Type']] || 'skip'
+    editToken: rec['Edit Token'] || '', photoType: PHOTO_LABEL_TO_KEY[rec['Photo Type']] || 'skip',
+    photoUrl: firstAttachmentUrl(rec.Photo)
   };
 }
 
@@ -300,7 +311,7 @@ function allyPopupHtml(a){
     : `<div class="note" style="margin-top:10px;">Contact info is hidden while off-hours &mdash; ${formatWaitLabel(a).toLowerCase()}, or look for another Ally showing green nearby.</div>`;
   return `<div class="ally-popup">
     <div class="ap-head">
-      <div class="ap-avatar" style="background:${a.color}">${a.initials}</div>
+      <div class="ap-avatar" style="background:${a.color}">${a.photoUrl ? `<img src="${a.photoUrl}" alt="${a.name}">` : a.initials}</div>
       <div class="ap-id">
         <div class="ap-name">${a.name}</div>
         <span class="ap-badge">Aqua-Tow Ally</span>
@@ -510,7 +521,14 @@ loadAlliesFromAirtable().then(()=>{
 });
 document.getElementById('areaSearchInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); runAreaSearch(); } });
 
-let joinLat=null, joinLng=null, selectedPhoto='upload';
+// A profile picture is now required for every Ally (Luke's call, 2026-09-24)
+// — the old "AI avatar" / "skip for now" options are gone from the form, and
+// selectedPhoto/photoType are always 'upload'/'Own Photo' going forward.
+// existingPhotoUrl tracks whether the profile being edited already has a real
+// photo on file in Airtable, so someone updating their hours later isn't
+// forced to re-upload a photo they already have — only a brand-new profile,
+// or an existing one that's never actually had a photo, must attach one.
+let joinLat=null, joinLng=null, selectedPhoto='upload', existingPhotoUrl='';
 
 document.querySelectorAll('#kitsPrefRow .check-opt').forEach(o=>o.addEventListener('click',()=>{
   const selCount = document.querySelectorAll('#kitsPrefRow .check-opt.sel').length;
@@ -599,20 +617,20 @@ function scheduleSummary(sch){
 const bioEl = document.getElementById('jBio'), bioCount = document.getElementById('bioCount');
 bioEl.addEventListener('input', ()=>{ bioCount.textContent = bioEl.value.length; });
 
-const photoDetail = document.getElementById('photoDetail');
-function renderPhotoDetail(){
-  if(selectedPhoto==='upload'){
-    photoDetail.innerHTML = '<input type="file" accept="image/*" id="jPhoto">';
-  } else if(selectedPhoto==='ai'){
-    photoDetail.innerHTML = '<div class="note">Aqua-Tow will generate a simple avatar for you once your order is verified — no photo needed.</div>';
-  } else {
-    photoDetail.innerHTML = '<div class="note">No problem — your pin will just show your initials.</div>';
-  }
+// Reads the chosen file (if any) as a data URL, for sending up to the
+// Profile Update webhook as base64 — the browser has no way to hand Airtable
+// a plain file, so this is what actually gets a photo into that field.
+function readPhotoFileAsDataUrl(){
+  const input = document.getElementById('jPhoto');
+  const file = input && input.files && input.files[0];
+  if(!file) return Promise.resolve(null);
+  return new Promise((resolve,reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>resolve({dataUrl: reader.result, filename: file.name});
+    reader.onerror = ()=>reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 }
-document.querySelectorAll('#photoRow .photo-opt').forEach(o=>o.addEventListener('click',()=>{
-  document.querySelectorAll('#photoRow .photo-opt').forEach(x=>x.classList.remove('sel'));
-  o.classList.add('sel'); selectedPhoto=o.dataset.photo; renderPhotoDetail();
-}));
 // --- join map: real Leaflet map with a draggable pin ---
 let joinMapInstance = null, joinMarker = null;
 const JOIN_DEFAULT_CENTER = [35.3, -80.9], JOIN_DEFAULT_ZOOM = 8;
@@ -811,9 +829,14 @@ function populateForm(data){
   }
   document.getElementById('jBio').value = data.bio || '';
   document.getElementById('bioCount').textContent = (data.bio||'').length;
-  const photoKey = PHOTO_LABEL_TO_KEY[data.photoType] || 'skip';
-  document.querySelectorAll('#photoRow .photo-opt').forEach(o=>o.classList.toggle('sel', o.dataset.photo===photoKey));
-  selectedPhoto = photoKey; renderPhotoDetail();
+  existingPhotoUrl = firstAttachmentUrl(data.Photo) || '';
+  const photoNote = document.getElementById('photoExistingNote');
+  if(existingPhotoUrl){
+    photoNote.style.display = 'block';
+    photoNote.textContent = "You already have a photo on file — only choose a new one below if you'd like to replace it.";
+  } else {
+    photoNote.style.display = 'none';
+  }
 }
 
 let currentEditToken = null;
@@ -875,7 +898,7 @@ document.getElementById('pasteLinkBtn').addEventListener('click', ()=>{
 });
 document.getElementById('pasteLinkInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('pasteLinkBtn').click(); } });
 
-document.getElementById('jSubmitBtn').addEventListener('click', ()=>{
+document.getElementById('jSubmitBtn').addEventListener('click', async ()=>{
   const name=document.getElementById('jName').value.trim();
   const order=document.getElementById('jOrder').value.trim();
   const phone=document.getElementById('jPhone').value.trim();
@@ -892,6 +915,29 @@ document.getElementById('jSubmitBtn').addEventListener('click', ()=>{
   if(schedule.every(d=>!d.on)){ alert('Please set at least one available day.'); return; }
   if(joinLat===null || joinLng===null){ alert('Please set your rough location on the map first.'); return; }
   if(!currentEditToken){ alert("Something's off — this page doesn't have your profile link's code. Try opening your email link again."); return; }
+  const jPhotoInput = document.getElementById('jPhoto');
+  const hasNewPhotoFile = jPhotoInput && jPhotoInput.files && jPhotoInput.files[0];
+  // A photo is required for every Ally — but only forces a fresh upload when
+  // there isn't already a real one on file (see existingPhotoUrl above), so
+  // updating your hours later doesn't force a re-upload every time.
+  if(!existingPhotoUrl && !hasNewPhotoFile){ alert('Please upload a profile picture — it helps boaters recognize you, and is now required for every Ally.'); return; }
+
+  const submitBtn = document.getElementById('jSubmitBtn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Saving…';
+
+  let photoFile = null;
+  if(hasNewPhotoFile){
+    try{ photoFile = await readPhotoFileAsDataUrl(); }
+    catch(e){
+      console.error('Could not read photo file:', e);
+      submitBtn.disabled = false; submitBtn.textContent = 'Save my profile';
+      statusNote.style.display = 'block';
+      statusNote.style.color = 'var(--pending)'; statusNote.style.borderColor = 'var(--pending)';
+      statusNote.textContent = "Couldn't read that photo file — try a different image, or try again.";
+      return;
+    }
+  }
 
   const payload = {
     editToken: currentEditToken,
@@ -911,12 +957,12 @@ document.getElementById('jSubmitBtn').addEventListener('click', ()=>{
     hoursSat: hoursStringFor(schedule[5]),
     hoursSun: hoursStringFor(schedule[6]),
     bio: bio,
-    photoType: PHOTO_TYPE_LABELS[selectedPhoto] || 'None (initials only)'
+    photoType: PHOTO_TYPE_LABELS[selectedPhoto] || 'Own Photo'
   };
-
-  const submitBtn = document.getElementById('jSubmitBtn');
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Saving…';
+  // Only sent when a new file was actually chosen — see the Make.com
+  // "Aqua-Tow Ally Profile Update" scenario for how this base64 payload gets
+  // turned into a real Airtable attachment on the Photo field.
+  if(photoFile){ payload.photoBase64 = photoFile.dataUrl; payload.photoFilename = photoFile.filename; }
 
   if(TEST_PROFILES[currentEditToken]){
     setTimeout(()=>{
