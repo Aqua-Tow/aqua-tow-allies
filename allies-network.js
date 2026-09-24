@@ -20,33 +20,61 @@ function servicesForKits(kitPurchasedOrArray){
   return services;
 }
 
-// Demo/example Allies spread across the country (for previewing the map and
-// the "become an Ally" edit-link flow before real signups exist). Marcus D.
-// mirrors the real seed record already sitting in the Airtable base;
-// editToken values here match test rows added to that base so the two stay
-// in sync once the Make.com lookup/update automations are wired up.
-const ALLIES = [
-  {name:"Marcus D.", initials:"MD", color:"#0b3d5c", kits:["Tow System"], orderNumber:"AT-10432", phone:"5551230101", lat:35.4088, lng:-80.9313, label:"Lake Norman, NC", contact:["call","text"], bio:"Run a 24' pontoon out of Lake Norman most weekends — happy to lend a hand.",
-    schedule: allDaySchedule("07:00","21:00"), editToken:"test-marcus", photoType:"skip"},
-  {name:"Jenna R.", initials:"JR", color:"#1c7293", kits:["Tow System","Jump Kit","Pump Kit"], orderNumber:"AT-10502", phone:"5551230201", lat:47.6062, lng:-122.3321, label:"Puget Sound, WA", contact:["call","text"], bio:"Full Recovery Kit on board — happy to help with a tow, a jump, or a bilge emergency.",
-    schedule: allDaySchedule("07:00","20:00"), editToken:"test-jenna", photoType:"ai"},
-  {name:"Carlos M.", initials:"CM", color:"#c97a2a", kits:["Tow System","Pump Kit"], orderNumber:"AT-10503", phone:"5551230202", lat:34.4839, lng:-114.3225, label:"Lake Havasu, AZ", contact:["call"], bio:"",
-    schedule: DAYS.map(d=> ["Sat","Sun"].includes(d) ? {on:true, all24:true, start:"", end:""} : {on:true, all24:false, start:"06:00", end:"22:00"}), editToken:"test-carlos", photoType:"skip"},
-  {name:"Emily K.", initials:"EK", color:"#5b7280", kits:["Jump Kit"], orderNumber:"AT-10504", phone:"5551230203", lat:44.9377, lng:-93.6570, label:"Lake Minnetonka, MN", contact:["text"], bio:"Weekend boater — carry a Jump Kit for dead batteries, always happy to help.",
-    schedule: DAYS.map(d=> ["Sat","Sun"].includes(d) ? {on:true, all24:false, start:"08:00", end:"20:00"} : {on:false, all24:false, start:"10:00", end:"16:00"}), editToken:"test-emily", photoType:"skip"},
-  {name:"Andre B.", initials:"AB", color:"#0b3d5c", kits:["Tow System","Jump Kit","Pump Kit"], orderNumber:"AT-10505", phone:"5551230204", lat:30.3935, lng:-97.9061, label:"Lake Travis, TX", contact:["call","text"], bio:"Full-time on the lake in season, ex-marina crew.",
-    schedule: allDaySchedule("06:00","22:00"), editToken:"test-andre", photoType:"upload"},
-  {name:"Sofia P.", initials:"SP", color:"#1c7293", kits:["Tow System"], orderNumber:"AT-10506", phone:"5551230205", lat:27.9506, lng:-82.4572, label:"Tampa Bay, FL", contact:["call","text"], bio:"",
-    schedule: allDaySchedule("07:00","19:00"), editToken:"test-sofia", photoType:"skip"},
-  {name:"Tyler H.", initials:"TH", color:"#c97a2a", kits:["Pump Kit"], orderNumber:"AT-10507", phone:"5551230206", lat:39.0968, lng:-120.0324, label:"Lake Tahoe, CA", contact:["text"], bio:"",
-    schedule: allDaySchedule("08:00","20:00"), editToken:"test-tyler", photoType:"skip"},
-  {name:"Grace L.", initials:"GL", color:"#5b7280", kits:["Tow System","Jump Kit","Pump Kit"], orderNumber:"AT-10508", phone:"5551230207", lat:43.4270, lng:-73.7129, label:"Lake George, NY", contact:["call","text"], bio:"Retired Coast Guard, know these waters well.",
-    schedule: DAYS.map(()=>({on:true, all24:true, start:"", end:""})), editToken:"test-grace", photoType:"skip"},
-  {name:"Owen S.", initials:"OS", color:"#0b3d5c", kits:["Tow System","Jump Kit"], orderNumber:"AT-10509", phone:"5551230208", lat:41.4993, lng:-81.6944, label:"Lake Erie, OH", contact:["call"], bio:"New to the network — happy to help fellow boaters near Cleveland.",
-    schedule: DAYS.map(d=> ["Sat","Sun"].includes(d) ? {on:true, all24:false, start:"08:00", end:"20:00"} : {on:false, all24:false, start:"10:00", end:"16:00"}), editToken:"test-owen", photoType:"skip"},
-];
+// Live Allies now come straight from the Aqua-Tow Allies Airtable base via a
+// Make.com scenario ("Aqua-Tow Allies Map Feed") — a webhook that runs an
+// Airtable Search Records for every row where Status = "Verified & Live",
+// then hands the raw records back as JSON. That means every kit owner who
+// gets verified in Airtable shows up here automatically the next time the
+// page loads — no more manually copying names into this file. See
+// loadAlliesFromAirtable() below for the fetch + field-mapping.
+const MAP_DATA_WEBHOOK = 'https://hook.us2.make.com/1e74mb39y7q94i4z7bpwq3tieanvfpw8';
 
-const KNOWN_AREAS = ALLIES.map(a=>({label:a.label, lat:a.lat, lng:a.lng}));
+// Rotating avatar-circle palette for Allies (Airtable doesn't store a color —
+// initials/photo art always did the rest of the identity work anyway).
+const AVATAR_COLORS = ['#0b3d5c','#1c7293','#c97a2a','#5b7280'];
+function initialsFor(fullName){
+  const parts = String(fullName||'').trim().split(/\s+/).filter(Boolean);
+  if(!parts.length) return '?';
+  if(parts.length===1) return parts[0].slice(0,2).toUpperCase();
+  return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+}
+
+// Converts one raw Airtable "Allies" record (as the Make.com map-feed
+// webhook returns it) into the shape the rest of this file expects. Returns
+// null for a record that's missing a name or a valid pin location (e.g. a
+// blank in-progress signup row) so it's silently skipped rather than
+// crashing the map.
+function mapAirtableRecordToAlly(rec, idx){
+  const name = rec['Full Name'];
+  const lat = Number(rec.Latitude), lng = Number(rec.Longitude);
+  if(!name || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const kits = String(rec['Kit Purchased']||'').split(',').map(s=>s.trim()).filter(Boolean);
+  const contact = (rec['Contact Methods']||[]).map(m=>CONTACT_LABEL_TO_VAL[m] || String(m).toLowerCase());
+  const schedule = DAYS.map(d=>parseHoursString(rec[`${d} Hours`]));
+  return {
+    name, initials: initialsFor(name), color: AVATAR_COLORS[idx % AVATAR_COLORS.length],
+    kits, orderNumber: rec['Order Number'] || '', phone: rec.Phone || '',
+    lat, lng, label: rec['Location Label'] || '',
+    contact, bio: rec.Bio || '', schedule,
+    editToken: rec['Edit Token'] || '', photoType: PHOTO_LABEL_TO_KEY[rec['Photo Type']] || 'skip'
+  };
+}
+
+let ALLIES = [];
+let KNOWN_AREAS = [];
+
+async function loadAlliesFromAirtable(){
+  try{
+    const res = await fetch(MAP_DATA_WEBHOOK, {cache:'no-store'});
+    if(!res.ok) throw new Error('Map feed responded with ' + res.status);
+    const rows = await res.json();
+    ALLIES = rows.map(mapAirtableRecordToAlly).filter(Boolean);
+  }catch(err){
+    console.error('Could not load Allies from Airtable:', err);
+    ALLIES = [];
+  }
+  KNOWN_AREAS = ALLIES.map(a=>({label:a.label, lat:a.lat, lng:a.lng}));
+}
 
 function findAreaMatch(query){
   const q = (query||'').trim().toLowerCase();
@@ -471,7 +499,15 @@ document.getElementById('showAllBtn').addEventListener('click', e=>{ e.preventDe
 
 // Land on the full, zoomed-out map with every active Ally pinned — no search
 // or location prompt required before someone can start panning around.
-renderAllAlliesOverview();
+// Allies now load from Airtable first (see loadAlliesFromAirtable above),
+// so the map/roster only render once that fetch resolves.
+document.getElementById('statusLine').textContent = 'Loading Allies…';
+loadAlliesFromAirtable().then(()=>{
+  renderAllAlliesOverview();
+  if(!ALLIES.length){
+    document.getElementById('statusLine').textContent = 'No active Allies to show right now — check back soon.';
+  }
+});
 document.getElementById('areaSearchInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); runAreaSearch(); } });
 
 let joinLat=null, joinLng=null, selectedPhoto='upload';
@@ -669,11 +705,11 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>{
 //   - "Aqua-Tow Ally Profile Lookup"  — GET ?token=... → JSON fields, or 404
 //   - "Aqua-Tow Ally Profile Update"  — POST token + fields → updates the
 //     Airtable row, responds {"success":true} (200) or {"error":...} (404)
-// Both scenarios currently need to be toggled ON (Immediately as data
-// arrives) in Make.com for these to work live — Luke's Make plan is on the
-// Free tier, capped at 2 active scenarios at once, so only two of the three
-// Aqua-Tow scenarios (Signup / Profile Lookup / Profile Update) can be
-// active simultaneously without upgrading.
+// Both scenarios need to be toggled ON (Immediately as data arrives) in
+// Make.com for these to work live. Luke upgraded off the Free tier's
+// 2-active-scenario cap on 2026-09-24, so these two can now run alongside
+// "Aqua-Tow Allies Map Feed" (the scenario that feeds the public map below)
+// without juggling which ones are switched on.
 const PROFILE_LOOKUP_WEBHOOK = 'https://hook.us2.make.com/1otpbfx45vpb4ds2i8vrj7okjg7ny8pt';
 const PROFILE_UPDATE_WEBHOOK = 'https://hook.us2.make.com/eaue84ss6pkidiyer546rr1nswc09ehj';
 
@@ -693,12 +729,12 @@ const PHOTO_LABEL_TO_KEY = { 'Own Photo':'upload', 'AI Avatar':'ai', 'None (init
 const CONTACT_METHOD_LABELS = { call: 'Call', text: 'Text' };
 const CONTACT_LABEL_TO_VAL = { Call: 'call', Text: 'text' };
 
-// Built from the demo ALLIES entries that carry an editToken — lets Luke (or
-// anyone) test the "open my link, see my profile, edit, save" experience
-// today, entirely client-side, with zero dependency on the Make.com webhooks
-// still being wired up. Real production tokens (created at purchase time)
-// will simply never match a key here, so they fall through to the real
-// PROFILE_LOOKUP_WEBHOOK/PROFILE_UPDATE_WEBHOOK path below unaffected.
+// Leftover client-side test-profile shim from before Allies were wired up to
+// Airtable — kept only as a safety net for a hand-typed demo token. ALLIES
+// is empty at the moment this file runs (it's only populated later, once
+// loadAlliesFromAirtable() resolves), so this stays permanently empty in
+// production and every real editToken correctly falls through to the live
+// PROFILE_LOOKUP_WEBHOOK/PROFILE_UPDATE_WEBHOOK path below.
 const TEST_PROFILES = {};
 ALLIES.forEach(a=>{
   if(!a.editToken) return;
