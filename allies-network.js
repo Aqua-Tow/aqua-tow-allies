@@ -1044,3 +1044,82 @@ function getPageSearchParams(){
     showGate();
   }
 })();
+
+
+// ===================================================================
+// Site-wide Terms & Conditions gate + Ally waiver gate (added v3.6,
+// 2026-09-24, appended below the existing code above rather than editing
+// it in place — see the HTML file's version-history comment for why).
+// ===================================================================
+// Blocks the whole page behind a click-to-accept overlay for EVERY visitor
+// (not just people signing up as an Ally) — Luke asked for this so nobody
+// can use the Find/Join/How pages without first seeing the "Aqua-Tow
+// doesn't verify Allies and isn't liable" disclosure. Uses localStorage so
+// a returning visitor on the same browser isn't shown it every single
+// visit. IMPORTANT: inside GoDaddy's sandboxed Custom Code iframe,
+// localStorage may be partitioned or blocked entirely — if writing/reading
+// it throws or silently doesn't persist, this safely just shows the gate
+// again on the next visit rather than skipping it. That's the correct
+// failure direction for a liability disclosure (fail closed, not open).
+const TERMS_STORAGE_KEY = 'aquaTowTermsAccepted_v1';
+function termsAlreadyAccepted(){
+  try{ return localStorage.getItem(TERMS_STORAGE_KEY) === 'yes'; }catch(e){ return false; }
+}
+function markTermsAccepted(){
+  try{ localStorage.setItem(TERMS_STORAGE_KEY, 'yes'); }catch(e){ }
+}
+function showTermsGate(){
+  const overlay = document.getElementById('tcOverlay');
+  if(!overlay) return;
+  overlay.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+function hideTermsGate(){
+  const overlay = document.getElementById('tcOverlay');
+  if(!overlay) return;
+  overlay.style.display = 'none';
+  document.body.style.overflow = '';
+}
+(function initTermsGate(){
+  const overlay = document.getElementById('tcOverlay');
+  if(!overlay) return;
+  if(termsAlreadyAccepted()){ hideTermsGate(); return; }
+  showTermsGate();
+  const acceptBtn = document.getElementById('tcAccept');
+  const declineBtn = document.getElementById('tcDecline');
+  if(acceptBtn) acceptBtn.addEventListener('click', ()=>{
+    markTermsAccepted();
+    hideTermsGate();
+  });
+  if(declineBtn) declineBtn.addEventListener('click', ()=>{
+    const modal = overlay.querySelector('.tc-modal');
+    if(modal){
+      modal.innerHTML = '<h2>Terms Required</h2><div class="tc-body"><p>You will need to accept these terms to use Aqua-Tow Allies. You are welcome to come back anytime.</p></div><div class="tc-actions"><a class="tc-accept" style="text-decoration:none;display:flex;align-items:center;justify-content:center;" href="https://aqua-tow.com" target="_top">Return to Aqua-Tow</a></div>';
+    }
+  });
+})();
+
+// Ally waiver gate: a CAPTURING listener on the existing Save button that
+// runs BEFORE that button's own save handler (defined earlier in this
+// file) and can block the save entirely, without editing that handler.
+(function initWaiverGate(){
+  const submitBtn = document.getElementById('jSubmitBtn');
+  if(!submitBtn) return;
+  submitBtn.addEventListener('click', function(e){
+    const waiverBox = document.getElementById('jWaiverAccept');
+    if(!waiverBox || !waiverBox.checked){
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      alert("Please check the box confirming you have read and agree to the Aqua-Tow Ally Release and Waiver of Liability before saving your profile.");
+      const row = waiverBox && waiverBox.closest('.waiver-row');
+      if(row) row.scrollIntoView({behavior:'smooth', block:'center'});
+    }
+  }, true);
+})();
+
+// Lets the waiver link text (not just the arrow) open the full waiver text.
+document.getElementById('waiverToggleLink')?.addEventListener('click', e=>{
+  e.preventDefault();
+  const d = document.getElementById('waiverDetails');
+  if(d) d.open = !d.open;
+});
