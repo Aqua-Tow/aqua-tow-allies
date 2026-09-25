@@ -909,18 +909,18 @@ document.getElementById('jSubmitBtn').addEventListener('click', async ()=>{
   const schedule = collectSchedule();
   const statusNote = document.getElementById('saveStatusNote');
   statusNote.style.display = 'none';
-  if(!name){ alert('Please enter your name.'); return; }
-  if(selectedKits.length===0){ alert('Please select at least one kit you own.'); return; }
-  if(methods.length===0){ alert('Please choose at least one way to be contacted.'); return; }
-  if(schedule.every(d=>!d.on)){ alert('Please set at least one available day.'); return; }
-  if(joinLat===null || joinLng===null){ alert('Please set your rough location on the map first.'); return; }
-  if(!currentEditToken){ alert("Something's off — this page doesn't have your profile link's code. Try opening your email link again."); return; }
+ if(!name){ statusNote.style.display='block'; statusNote.textContent='Please enter your name.'; return; }
+if(selectedKits.length===0){ statusNote.style.display='block'; statusNote.textContent='Please select at least one kit you own.'; return; }
+if(methods.length===0){ statusNote.style.display='block'; statusNote.textContent='Please choose at least one way to be contacted.'; return; }
+if(schedule.every(d=>!d.on)){ statusNote.style.display='block'; statusNote.textContent='Please set at least one available day.'; return; }
+if(joinLat===null || joinLng===null){ statusNote.style.display='block'; statusNote.textContent='Please set your rough location on the map first.'; return; }
+if(!currentEditToken){ statusNote.style.display='block'; statusNote.textContent="Something's off — this page doesn't have your profile link's code. Try opening your email link again."; return; }
   const jPhotoInput = document.getElementById('jPhoto');
   const hasNewPhotoFile = jPhotoInput && jPhotoInput.files && jPhotoInput.files[0];
   // A photo is required for every Ally — but only forces a fresh upload when
   // there isn't already a real one on file (see existingPhotoUrl above), so
   // updating your hours later doesn't force a re-upload every time.
-  if(!existingPhotoUrl && !hasNewPhotoFile){ alert('Please upload a profile picture — it helps boaters recognize you, and is now required for every Ally.'); return; }
+  if(!existingPhotoUrl && !hasNewPhotoFile){ statusNote.style.display='block'; statusNote.textContent='Please upload a profile picture — it helps boaters recognize you, and is now required for every Ally.'; return; }
 
   const submitBtn = document.getElementById('jSubmitBtn');
   submitBtn.disabled = true;
@@ -1110,7 +1110,8 @@ function hideTermsGate(){
     if(!waiverBox || !waiverBox.checked){
       e.preventDefault();
       e.stopImmediatePropagation();
-      alert("Please check the box confirming you have read and agree to the Aqua-Tow Ally Release and Waiver of Liability before saving your profile.");
+      const statusNote = document.getElementById('saveStatusNote');
+if(statusNote){ statusNote.style.display='block'; statusNote.textContent="Please check the box confirming you have read and agree to the Aqua-Tow Ally Release and Waiver of Liability before saving your profile."; }
       const row = waiverBox && waiverBox.closest('.waiver-row');
       if(row) row.scrollIntoView({behavior:'smooth', block:'center'});
     }
