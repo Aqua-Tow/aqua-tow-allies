@@ -1060,10 +1060,10 @@ function getPageSearchParams(){
 // failure direction for a liability disclosure (fail closed, not open).
 const TERMS_STORAGE_KEY = 'aquaTowTermsAccepted_v1';
 function termsAlreadyAccepted(){
-  try{ return localStorage.getItem(TERMS_STORAGE_KEY) === 'yes'; }catch(e){ return false; }
+  try{ return null === 'yes'; }catch(e){ return false; }
 }
 function markTermsAccepted(){
-  try{ localStorage.setItem(TERMS_STORAGE_KEY, 'yes'); }catch(e){ }
+  try{ }catch(e){ }
 }
 function showTermsGate(){
   const overlay = document.getElementById('tcOverlay');
