@@ -917,12 +917,9 @@ if(joinLat===null || joinLng===null){ statusNote.style.display='block'; statusNo
 if(!currentEditToken){ statusNote.style.display='block'; statusNote.textContent="Something's off — this page doesn't have your profile link's code. Try opening your email link again."; return; }
   const jPhotoInput = document.getElementById('jPhoto');
   const hasNewPhotoFile = jPhotoInput && jPhotoInput.files && jPhotoInput.files[0];
-  // A photo is required for every Ally — but only forces a fresh upload when
-  // there isn't already a real one on file (see existingPhotoUrl above), so
-  // updating your hours later doesn't force a re-upload every time.
-  if(!existingPhotoUrl && !hasNewPhotoFile){ statusNote.style.display='block'; statusNote.textContent='Please upload a profile picture — it helps boaters recognize you, and is now required for every Ally.'; return; }
-
-  const submitBtn = document.getElementById('jSubmitBtn');
+  // Photo upload is optional for now (Luke's call, 2026-09-26) — the photo-
+      // upload feature is on hold while an Airtable-side upload issue gets
+      // sorted out, so this no longer blocks saving a profile.
   submitBtn.disabled = true;
   submitBtn.textContent = 'Saving…';
 
