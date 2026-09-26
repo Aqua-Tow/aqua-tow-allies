@@ -528,7 +528,7 @@ document.getElementById('areaSearchInput').addEventListener('keydown', e=>{ if(e
 // photo on file in Airtable, so someone updating their hours later isn't
 // forced to re-upload a photo they already have — only a brand-new profile,
 // or an existing one that's never actually had a photo, must attach one.
-let joinLat=null, joinLng=null, selectedPhoto='upload', existingPhotoUrl='';
+let joinLat=null, joinLng=null, selectedPhoto='upload', existingPhotoUrl='', existingWaiverAcceptedAt='';
 
 document.querySelectorAll('#kitsPrefRow .check-opt').forEach(o=>o.addEventListener('click',()=>{
   const selCount = document.querySelectorAll('#kitsPrefRow .check-opt.sel').length;
@@ -812,6 +812,8 @@ function populateForm(data){
     : String(data.kitPurchased||'Tow System').split(',').map(s=>s.trim()).filter(Boolean);
   document.querySelectorAll('#kitsPrefRow .check-opt').forEach(o=>o.classList.toggle('sel', ownedKits.includes(o.dataset.val)));
   document.getElementById('jPhone').value = data.phone || '';
+  document.getElementById('jEmail').value = data.email || '';
+  existingWaiverAcceptedAt = data.waiverAcceptedAt || '';
   // contactMethods comes back as a real array from TEST_PROFILES, but as a
   // comma-separated string (e.g. "Call, Text") from the live Make.com
   // Profile Lookup scenario — Make's IML can't emit an escaped-quote JSON
@@ -899,9 +901,11 @@ document.getElementById('pasteLinkBtn').addEventListener('click', ()=>{
 document.getElementById('pasteLinkInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('pasteLinkBtn').click(); } });
 
 document.getElementById('jSubmitBtn').addEventListener('click', async ()=>{
+  const submitBtn = document.getElementById('jSubmitBtn');
   const name=document.getElementById('jName').value.trim();
   const order=document.getElementById('jOrder').value.trim();
   const phone=document.getElementById('jPhone').value.trim();
+  const email=document.getElementById('jEmail').value.trim();
   const bio=document.getElementById('jBio').value.trim();
   const locationLabel=document.getElementById('jAreaInput').value.trim() || 'Custom pin location';
   const methods = Array.from(document.querySelectorAll('#contactPrefRow .check-opt.sel')).map(o=>CONTACT_METHOD_LABELS[o.dataset.val] || o.dataset.val);
@@ -910,6 +914,9 @@ document.getElementById('jSubmitBtn').addEventListener('click', async ()=>{
   const statusNote = document.getElementById('saveStatusNote');
   statusNote.style.display = 'none';
  if(!name){ statusNote.style.display='block'; statusNote.textContent='Please enter your name.'; return; }
+if(!phone){ statusNote.style.display='block'; statusNote.textContent='Please enter your phone number.'; return; }
+if(!email){ statusNote.style.display='block'; statusNote.textContent='Please enter your email address.'; return; }
+if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ statusNote.style.display='block'; statusNote.textContent='Please enter a valid email address.'; return; }
 if(selectedKits.length===0){ statusNote.style.display='block'; statusNote.textContent='Please select at least one kit you own.'; return; }
 if(methods.length===0){ statusNote.style.display='block'; statusNote.textContent='Please choose at least one way to be contacted.'; return; }
 if(schedule.every(d=>!d.on)){ statusNote.style.display='block'; statusNote.textContent='Please set at least one available day.'; return; }
@@ -920,6 +927,12 @@ if(!currentEditToken){ statusNote.style.display='block'; statusNote.textContent=
   // Photo upload is optional for now (Luke's call, 2026-09-26) — the photo-
       // upload feature is on hold while an Airtable-side upload issue gets
       // sorted out, so this no longer blocks saving a profile.
+  // Waiver acceptance timestamp: recorded once, the first time this Ally
+  // ever saves (initWaiverGate below already blocks this whole click unless
+  // the waiver checkbox is checked). If a timestamp already came back from
+  // Airtable via the profile lookup, keep reusing that original moment
+  // instead of overwriting it on every later edit.
+  const waiverAcceptedAt = existingWaiverAcceptedAt || new Date().toISOString();
   submitBtn.disabled = true;
   submitBtn.textContent = 'Saving…';
 
@@ -942,6 +955,8 @@ if(!currentEditToken){ statusNote.style.display='block'; statusNote.textContent=
     orderNumber: order,
     kitPurchased: kitsLabel(selectedKits),
     phone: phone,
+    email: email,
+    waiverAcceptedAt: waiverAcceptedAt,
     contactMethods: methods,
     locationLabel: locationLabel,
     latitude: joinLat,
@@ -987,6 +1002,7 @@ if(!currentEditToken){ statusNote.style.display='block'; statusNote.textContent=
     body: JSON.stringify(payload)
   }).then(res => {
     if(!res.ok) throw new Error('Webhook responded with ' + res.status);
+    existingWaiverAcceptedAt = waiverAcceptedAt;
     submitBtn.disabled = false;
     submitBtn.textContent = 'Save my profile';
     statusNote.style.display = 'block';
