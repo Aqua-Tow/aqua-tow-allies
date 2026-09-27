@@ -67,8 +67,22 @@ function mapAirtableRecordToAlly(rec, idx){
     lat, lng, label: rec['Location Label'] || '',
     contact, bio: rec.Bio || '', schedule,
     editToken: rec['Edit Token'] || '', photoType: PHOTO_LABEL_TO_KEY[rec['Photo Type']] || 'skip',
-    photoUrl: firstAttachmentUrl(rec.Photo)
+    photoUrl: firstAttachmentUrl(rec.Photo),
+  boatMake: rec['Boat Make'] || '', boatModel: rec['Boat Model'] || '',
+    boatLength: rec['Boat Length'] || '', boatColor: rec['Boat Color'] || ''
   };
+}
+
+// A single, natural-reading line from an Ally's separately-stored boat
+// fields — e.g. "22ft White Boston Whaler 220 Dauntless" — or '' if they
+// haven't filled in any of it (in which case the card just omits the row).
+function boatDescription(a){
+  const parts = [];
+  if(a.boatLength) parts.push(`${a.boatLength}ft`);
+  if(a.boatColor) parts.push(a.boatColor);
+  if(a.boatMake) parts.push(a.boatMake);
+  if(a.boatModel) parts.push(a.boatModel);
+  return parts.join(' ');
 }
 
 let ALLIES = [];
@@ -321,6 +335,7 @@ function allyPopupHtml(a){
     ${a.bio ? `<div class="ap-bio">${a.bio}</div>` : ''}
     <div class="ap-divider"></div>
     <div class="ap-row">${clockIcon()}<div><b>Typically available</b><span>${allySchedulePhrase(a)}</span></div></div>
+    ${boatDescription(a) ? `<div class="ap-row">${boatIcon()}<div><b>Boat</b><span>${boatDescription(a)}</span></div></div>` : ''}
     <div style="margin-top:6px;font-weight:700;font-size:.82rem;color:${availableNow ? 'var(--good)' : 'var(--pending)'};">${availableNow ? 'Available now' : formatWaitLabel(a)}</div>
     <div class="ap-chip-label">Services offered</div>
     <div class="ap-chips">${servicesForKits(a.kits).map(s=>`<span class="ap-chip">${(SERVICE_ICONS[s]||boatIcon)()} ${s}</span>`).join('')}</div>
@@ -813,6 +828,10 @@ function populateForm(data){
   document.querySelectorAll('#kitsPrefRow .check-opt').forEach(o=>o.classList.toggle('sel', ownedKits.includes(o.dataset.val)));
   document.getElementById('jPhone').value = data.phone || '';
   document.getElementById('jEmail').value = data.email || '';
+  document.getElementById('jBoatMake').value = data.boatMake || '';
+  document.getElementById('jBoatModel').value = data.boatModel || '';
+  document.getElementById('jBoatLength').value = data.boatLength || '';
+  document.getElementById('jBoatColor').value = data.boatColor || '';
   existingWaiverAcceptedAt = data.waiverAcceptedAt || '';
   // contactMethods comes back as a real array from TEST_PROFILES, but as a
   // comma-separated string (e.g. "Call, Text") from the live Make.com
@@ -906,6 +925,10 @@ document.getElementById('jSubmitBtn').addEventListener('click', async ()=>{
   const order=document.getElementById('jOrder').value.trim();
   const phone=document.getElementById('jPhone').value.trim();
   const email=document.getElementById('jEmail').value.trim();
+  const boatMake=document.getElementById('jBoatMake').value.trim();
+  const boatModel=document.getElementById('jBoatModel').value.trim();
+  const boatLength=document.getElementById('jBoatLength').value.trim();
+  const boatColor=document.getElementById('jBoatColor').value.trim();
   const bio=document.getElementById('jBio').value.trim();
   const locationLabel=document.getElementById('jAreaInput').value.trim() || 'Custom pin location';
   const methods = Array.from(document.querySelectorAll('#contactPrefRow .check-opt.sel')).map(o=>CONTACT_METHOD_LABELS[o.dataset.val] || o.dataset.val);
@@ -956,6 +979,10 @@ if(!currentEditToken){ statusNote.style.display='block'; statusNote.textContent=
     kitPurchased: kitsLabel(selectedKits),
     phone: phone,
     email: email,
+    boatMake: boatMake,
+    boatModel: boatModel,
+    boatLength: boatLength ? Number(boatLength) : null,
+    boatColor: boatColor,
     waiverAcceptedAt: waiverAcceptedAt,
     contactMethods: methods,
     locationLabel: locationLabel,
