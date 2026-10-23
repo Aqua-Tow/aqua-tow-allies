@@ -112,8 +112,8 @@
             action: 'Create a high-wind checklist for securing boats, lifts and loose gear.' },
           { q: 'After a storm, do you run a headcount to confirm every guest and every boat is accounted for?',
             action: 'Run a post-storm headcount of every guest and every boat.' },
-          { q: 'Do you know the wind speed your docks and boat lifts are rated for — and the point where boats need to come off the lifts or out of the water?', expert: true,
-            action: 'Find out the wind rating of your docks and lifts, and set the forecast that triggers pulling boats.' }
+          { q: 'Do your staff know to turn docked boats bow-out, facing open water, before a storm? Waves breaking over a low stern can swamp a boat right at the dock.', expert: true,
+            action: 'Before a storm, turn docked boats bow-out toward open water and double up the lines, so waves hit the bow instead of the low stern.' }
         ]
       },
       {
