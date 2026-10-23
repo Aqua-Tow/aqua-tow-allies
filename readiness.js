@@ -65,7 +65,9 @@
           { q: 'Do you keep fuel-spill absorbent pads or boom on site for a boat leaking fuel as it sinks?',
             action: 'Stock fuel-spill absorbent pads and boom on site.' },
           { q: 'Is it written down who pays for and handles removing a sunk boat — owner, insurer, or you — and is that in your slip or rental agreement?',
-            action: 'Put who pays for and handles sunk-boat removal in writing — and in your slip and rental agreements.' }
+            action: 'Put who pays for and handles sunk-boat removal in writing — and in your slip and rental agreements.' },
+          { q: 'Do you know your state’s deadline for removing a sunken boat, who enforces it, and who gets fined if it’s missed?', expert: true,
+            action: 'Learn your state’s sunken-boat removal deadline and who enforces it — before a boat goes down at your dock.' }
         ]
       },
       {
@@ -86,7 +88,9 @@
           { q: 'Could you give responders the boat’s description, the person’s description, and where they planned to go, within 5 minutes?',
             action: 'Capture boat, person and trip-plan details at check-out so responders get them in minutes.' },
           { q: 'Do you have a clear rule on whether your staff search on their own — and if they do, a boat with lights and a trained operator?',
-            action: 'Decide in writing whether staff search — and if so, with what boat, lights and training.' }
+            action: 'Decide in writing whether staff search — and if so, with what boat, lights and training.' },
+          { q: 'Do you know whether your sheriff’s water patrol is actually on duty after dark — and how long it takes them to get a boat on your water at night?', expert: true,
+            action: 'Call your sheriff’s water patrol and ask their after-dark response time for your lake. Plan around the real answer.' }
         ]
       },
       {
@@ -107,7 +111,9 @@
           { q: 'Is there a checklist for securing docked boats, lifts, and loose gear before high wind?',
             action: 'Create a high-wind checklist for securing boats, lifts and loose gear.' },
           { q: 'After a storm, do you run a headcount to confirm every guest and every boat is accounted for?',
-            action: 'Run a post-storm headcount of every guest and every boat.' }
+            action: 'Run a post-storm headcount of every guest and every boat.' },
+          { q: 'Do you know the wind speed your docks and boat lifts are rated for — and the point where boats need to come off the lifts or out of the water?', expert: true,
+            action: 'Find out the wind rating of your docks and lifts, and set the forecast that triggers pulling boats.' }
         ]
       },
       {
@@ -128,7 +134,9 @@
           { q: 'Is there a plan for moving people — and boats, if it’s safe — away from a fire near the docks?',
             action: 'Plan how to clear people — and boats, when safe — away from a dock fire.' },
           { q: 'Could staff give 911 your exact address and which dock or building to come to, without looking it up?',
-            action: 'Post your exact 911 address and dock and building names by every phone.' }
+            action: 'Post your exact 911 address and dock and building names by every phone.' },
+          { q: 'Do your staff know that water spreads a gasoline fire — and are the extinguishers near fuel rated for Class B (flammable liquid) fires?', expert: true,
+            action: 'Put Class B-rated extinguishers near fuel, and teach staff never to throw water on a fuel fire.' }
         ]
       },
       {
@@ -149,7 +157,32 @@
           { q: 'Do you have an AED, and does every staff member know where it is?',
             action: 'Get an AED and make sure every staff member knows where it is.' },
           { q: 'Do your docks have ladders or reach poles so a person can be pulled out or climb out of the water?',
-            action: 'Add ladders or reach poles so a person can get out of the water.' }
+            action: 'Add ladders or reach poles so a person can get out of the water.' },
+          { q: 'Do staff know that in cold water the first minute is the deadliest — cold shock makes people gasp and inhale water long before hypothermia sets in?', expert: true,
+            action: 'Teach staff the 1-10-1 rule for cold water: 1 minute to control breathing, 10 minutes of useful movement, about 1 hour before hypothermia.' }
+        ]
+      },
+      {
+        key: 'airlift', short: 'Medical airlift',
+        name: 'A medical helicopter landing',
+        gut: 'A guest has a life-threatening emergency and responders are sending a helicopter.',
+        title: '“They’re sending a helicopter.”',
+        line: '“The ambulance is 40 minutes out, so they’re launching a helicopter. Dispatch wants to know where it can land.”',
+        tag: 'Everyone’s looking at you.',
+        youtubeId: '',
+        questions: [
+          { q: 'Do you have a pre-chosen helicopter landing zone on or near your property — open, flat, and clear of trees, power lines and poles?', expert: true,
+            action: 'Choose a helicopter landing zone with your local air-medical provider — open, flat and clear of wires and trees.' },
+          { q: 'Do you know that landing zone’s GPS coordinates (latitude and longitude), and are they posted where staff can read them to dispatch?', expert: true,
+            action: 'Write down the landing zone’s GPS coordinates and post them by every phone.' },
+          { q: 'Do you know how to mark the landing zone so a pilot can find it — in daylight and at night?', expert: true,
+            action: 'Ask your air-medical provider how they want the landing zone marked day and night, and keep that gear ready.' },
+          { q: 'Do staff know to clear chairs, umbrellas, towels and loose gear, and keep people well back? Rotor wash turns them into projectiles.',
+            action: 'Train staff to clear loose items and keep everyone well back when a helicopter lands.' },
+          { q: 'Is someone assigned to meet the ambulance or helicopter crew and lead them straight to the patient?',
+            action: 'Assign who meets responders and walks them to the patient.' },
+          { q: 'Has your local air-medical service ever visited your property to look at where they would land?', expert: true,
+            action: 'Invite your nearest air-medical service out for a landing-zone visit — many offer them to businesses.' }
         ]
       }
     ]
@@ -203,13 +236,16 @@
   var SOURCE = (getParams().get('source') || '').slice(0, 80);
 
   function computeResults() {
+    // Reality score per scenario = share of Yes answers, on the same 0–10
+    // scale as the gut rating. Overall score = average of those, as 0–100.
+    // Airtable's "DockReady Score" formula must match this.
     var rows = SCN.map(function (s) {
       var yes = state.answers[s.key].filter(function (a) { return a === 'yes'; }).length;
-      var real = yes * 2;
+      var real = Math.round((yes / s.questions.length) * 10);
       var conf = Number(state.conf[s.key]);
       return { s: s, conf: conf, real: real, gap: conf - real };
     });
-    var score = rows.reduce(function (t, r) { return t + r.real; }, 0) * 2;
+    var score = Math.round(rows.reduce(function (t, r) { return t + r.real; }, 0) * 100 / (SCN.length * 10));
     var band = score >= 80
       ? { name: 'Ready', note: 'Strong basics. Fine-tune and drill.' }
       : score >= 50
@@ -229,7 +265,7 @@
       s.questions.forEach(function (q, i) {
         var a = state.answers[s.key][i];
         detail.push('- ' + q.q + ' → ' + (ANSWER_LABELS[a] || '—'));
-        if (a !== 'yes') gaps.push('- ' + q.action);
+        if (a !== 'yes') gaps.push('- ' + q.action + (q.expert ? ' [most owners miss this]' : ''));
       });
       detail.push('');
       if (gaps.length) missed.push(s.name + ':\n' + gaps.join('\n'));
@@ -248,7 +284,7 @@
       answerDetail: detail.join('\n').trim()
     };
     DR_CONTENT.profile.forEach(function (f) { p[f.key] = state.profile[f.key] || ''; });
-    var map = { sinking: 'Sinking', overdue: 'Overdue', storm: 'Storm', fire: 'Fire', water: 'Water' };
+    var map = { sinking: 'Sinking', overdue: 'Overdue', storm: 'Storm', fire: 'Fire', water: 'Water', airlift: 'Airlift' };
     res.rows.forEach(function (r) {
       p['conf' + map[r.s.key]] = r.conf;
       p['real' + map[r.s.key]] = r.real;
@@ -295,7 +331,7 @@
     return '<section class="dr-screen dr-welcome">' +
       '<div class="dr-tag">Aqua-Tow Waterfront Readiness</div>' +
       '<h1>How ready is your waterfront, really?</h1>' +
-      '<p class="dr-lede">Five real emergencies, shown the way they actually walk through your door. Answer honestly and see where your team is ready — and where it isn’t. Free, about 7 minutes.</p>' +
+      '<p class="dr-lede">Six real emergencies, shown the way they actually walk through your door. Answer honestly and see where your team is ready — and where it isn’t. Free, about 8 minutes.</p>' +
       '<button type="button" class="dr-btn dr-btn-primary dr-btn-big" data-act="next">Start the check</button>' +
       '<p class="dr-fine">No sales call unless you ask for one. Your results show on screen the moment you finish.</p>' +
       '<p class="dr-cred">Built by Aqua-Tow — 24/7 towing and sunken-boat recovery, working directly with insurers and state agencies.</p>' +
@@ -361,7 +397,9 @@
       '<h3 class="dr-really">How ready are you, really?</h3>';
     s.questions.forEach(function (q, qi) {
       var a = state.answers[s.key][qi];
-      html += '<div class="dr-q"><p>' + esc(q.q) + '</p><div class="dr-seg" role="group">' +
+      html += '<div class="dr-q' + (q.expert ? ' dr-q-expert' : '') + '">' +
+        (q.expert ? '<span class="dr-expert">Most owners miss this</span>' : '') +
+        '<p>' + esc(q.q) + '</p><div class="dr-seg" role="group">' +
         ['yes', 'no', 'unsure'].map(function (k) {
           var sel = a === k;
           return '<button type="button" class="dr-seg-btn dr-seg-' + k + (sel ? ' is-sel' : '') + '" aria-pressed="' + sel + '" data-ans="' + s.key + '" data-qi="' + qi + '" data-val="' + k + '">' + ANSWER_LABELS[k] + '</button>';
@@ -414,29 +452,27 @@
         '</b> at <b>' + res.lowest.real + '/10</b>.</p></div>';
     }
 
-    html += '<h3 class="dr-h3">Confidence vs. reality</h3>' +
-      '<div class="dr-legend"><span class="dr-key dr-key-conf"></span>You said <span class="dr-key dr-key-real"></span>Your answers say</div>' +
-      '<div class="dr-bars">';
+    // One card per scenario: what they said vs. what their answers say,
+    // then exactly what to fix for that scenario.
+    html += '<h3 class="dr-h3">Scenario by scenario</h3>' +
+      '<div class="dr-legend"><span class="dr-key dr-key-conf"></span>You said <span class="dr-key dr-key-real"></span>Your answers say</div>';
     res.rows.forEach(function (r) {
       var flag = r.gap >= 4;
-      html += '<div class="dr-bar-row' + (flag ? ' is-flag' : '') + '">' +
+      var items = r.s.questions.filter(function (_q, i) { return state.answers[r.s.key][i] !== 'yes'; });
+      html += '<div class="dr-res-card' + (flag ? ' is-flag' : '') + '">' +
         '<div class="dr-bar-label">' + esc(r.s.short) + (flag ? ' <em>Blind spot</em>' : '') + '</div>' +
         '<div class="dr-bar"><span class="dr-bar-conf" style="width:' + (r.conf * 10) + '%"></span><b>' + r.conf + '</b></div>' +
-        '<div class="dr-bar"><span class="dr-bar-real" style="width:' + (r.real * 10) + '%"></span><b>' + r.real + '</b></div>' +
-        '</div>';
+        '<div class="dr-bar"><span class="dr-bar-real" style="width:' + (r.real * 10) + '%"></span><b>' + r.real + '</b></div>';
+      if (items.length) {
+        html += '<div class="dr-todo-k">What to fix</div><ul class="dr-todo">' +
+          items.map(function (q) {
+            return '<li>' + esc(q.action) + (q.expert ? ' <span class="dr-expert dr-expert-sm">Most owners miss this</span>' : '') + '</li>';
+          }).join('') + '</ul>';
+      } else {
+        html += '<p class="dr-res-ok">You answered yes to everything here. Keep drilling it.</p>';
+      }
+      html += '</div>';
     });
-    html += '</div>';
-
-    var anyGap = false, todo = '';
-    SCN.forEach(function (s) {
-      var items = s.questions.filter(function (_q, i) { return state.answers[s.key][i] !== 'yes'; });
-      if (!items.length) return;
-      anyGap = true;
-      todo += '<div class="dr-todo-group"><h4>' + esc(s.name) + '</h4><ul>' +
-        items.map(function (q) { return '<li>' + esc(q.action) + '</li>'; }).join('') + '</ul></div>';
-    });
-    html += '<h3 class="dr-h3">Where to start</h3>' +
-      (anyGap ? todo : '<p class="dr-sub">You answered yes to every item. Keep running drills so it stays that way.</p>');
 
     html += '<div class="dr-cta">' +
       '<p>Aqua-Tow Waterfront Readiness helps resorts, marinas and waterfront businesses close these gaps — written plans, staff training, the right equipment on site, and a 24/7 recovery partner when it counts.</p>' +
