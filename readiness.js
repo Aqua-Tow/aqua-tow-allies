@@ -269,7 +269,7 @@
       s.questions.forEach(function (q, i) {
         var a = state.answers[s.key][i];
         detail.push('- ' + q.q + ' → ' + (ANSWER_LABELS[a] || '—'));
-        if (a !== 'yes') gaps.push('- ' + q.action + (q.expert ? ' [most owners miss this]' : ''));
+        if (a !== 'yes') gaps.push('- ' + q.action + (q.expert ? ' [often missed]' : ''));
       });
       detail.push('');
       if (gaps.length) missed.push(s.name + ':\n' + gaps.join('\n'));
@@ -402,7 +402,7 @@
     s.questions.forEach(function (q, qi) {
       var a = state.answers[s.key][qi];
       html += '<div class="dr-q' + (q.expert ? ' dr-q-expert' : '') + '">' +
-        (q.expert ? '<span class="dr-expert">Most owners miss this</span>' : '') +
+        (q.expert ? '<span class="dr-expert">Often missed</span>' : '') +
         '<p>' + esc(q.q) + '</p><div class="dr-seg" role="group">' +
         ['yes', 'no', 'unsure'].map(function (k) {
           var sel = a === k;
@@ -470,7 +470,7 @@
       if (items.length) {
         html += '<div class="dr-todo-k">What to fix</div><ul class="dr-todo">' +
           items.map(function (q) {
-            return '<li>' + esc(q.action) + (q.expert ? ' <span class="dr-expert dr-expert-sm">Most owners miss this</span>' : '') + '</li>';
+            return '<li>' + esc(q.action) + (q.expert ? ' <span class="dr-expert dr-expert-sm">Often missed</span>' : '') + '</li>';
           }).join('') + '</ul>';
       } else {
         html += '<p class="dr-res-ok">You answered yes to everything here. Keep drilling it.</p>';
