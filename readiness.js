@@ -136,7 +136,9 @@
           { q: 'Could staff give 911 your exact address and which dock or building to come to, without looking it up?',
             action: 'Post your exact 911 address and dock and building names by every phone.' },
           { q: 'Do your staff know that water spreads a gasoline fire — and are the extinguishers near fuel rated for Class B (flammable liquid) fires?', expert: true,
-            action: 'Put Class B-rated extinguishers near fuel, and teach staff never to throw water on a fuel fire.' }
+            action: 'Put Class B-rated extinguishers near fuel, and teach staff never to throw water on a fuel fire.' },
+          { q: 'If a cabin or the main lodge catches fire, do you have a pump and enough hose to draw lake water and reach it? At a remote camp, the fire department can be a long way out.', expert: true,
+            action: 'Get a portable fire pump with enough hose to reach every cabin and the lodge from the water, and train staff to start and run it.' }
         ]
       },
       {
