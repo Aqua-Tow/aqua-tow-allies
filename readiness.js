@@ -165,7 +165,9 @@
       {
         key: 'airlift', short: 'Medical airlift',
         name: 'A medical helicopter landing',
-        gut: 'A guest has a life-threatening emergency and responders are sending a helicopter.',
+        // Keep the helicopter out of this line: the gut check should not
+        // hint at it. The scenario page reveals it.
+        gut: 'A guest has a life-threatening emergency.',
         title: '“They’re sending a helicopter.”',
         line: '“The ambulance is 40 minutes out, so they’re launching a helicopter. Dispatch wants to know where it can land.”',
         tag: 'Everyone’s looking at you.',
