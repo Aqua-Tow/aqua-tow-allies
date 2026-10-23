@@ -20,7 +20,9 @@
   var WEBHOOK_URL = 'https://hook.us2.make.com/ljy9lihstikujs4fv9ebe551jjo1ocul';
   // Where the "Book a free 15-minute call" button goes. Swap for a
   // calendar link (Calendly, Outlook bookings, etc.) once there is one.
-  var BOOK_CALL_URL = 'mailto:luke@aqua-tow.com?subject=DockReady%20results%20walkthrough';
+  var BOOK_CALL_URL = 'mailto:admin@aqua-tow.com?subject=DockReady%20results%20walkthrough';
+  // The tiers and pricing page the "See your options" button opens.
+  var PLANS_URL = 'https://aqua-tow.com/readiness-plans';
 
   // ------------------------------------------------------------------
   // CONTENT
@@ -238,6 +240,17 @@
     return new URLSearchParams(window.location.search);
   }
   var SOURCE = (getParams().get('source') || '').slice(0, 80);
+
+  // Small vs large property, matching the Service Tiers rule: small is up to
+  // 50 slips and up to 15 peak-day staff. Sets the price shown on the plans page.
+  function propertySize() {
+    var smallSlips = ['None', '1–10', '11–50'].indexOf(state.profile.slips) !== -1;
+    var smallStaff = ['1–5', '6–15'].indexOf(state.profile.peakStaff) !== -1;
+    return smallSlips && smallStaff ? 'small' : 'large';
+  }
+  function plansUrl() {
+    return PLANS_URL + '?size=' + propertySize() + (SOURCE ? '&source=' + encodeURIComponent(SOURCE) : '');
+  }
 
   function computeResults() {
     // Reality score per scenario = share of Yes answers, on the same 0–10
@@ -480,7 +493,8 @@
 
     html += '<div class="dr-cta">' +
       '<p>Aqua-Tow Waterfront Readiness helps resorts, marinas and waterfront businesses close these gaps — written plans, staff training, the right equipment on site, and a 24/7 recovery partner when it counts.</p>' +
-      '<a class="dr-btn dr-btn-primary dr-btn-big" href="' + esc(BOOK_CALL_URL) + '" target="_top">Book a free 15-minute call</a>' +
+      '<a class="dr-btn dr-btn-primary dr-btn-big" href="' + esc(plansUrl()) + '" target="_top">See your options</a>' +
+      '<p style="margin:12px 0 0;text-align:center;font-size:.95rem">or <a href="' + esc(BOOK_CALL_URL) + '" target="_top" style="color:inherit;text-decoration:underline">book a free 15-minute call</a></p>' +
       '</div>' +
       '<p class="dr-disclaimer">This check is for general education only. It is not a safety inspection, certification or legal advice, and doesn’t replace guidance from your insurer, local authorities or a qualified professional.</p>' +
       '</section>';
