@@ -56,7 +56,7 @@
         title: '“My boat’s sinking at the dock!”',
         line: '“Help — my boat’s sinking at the dock! The back end’s almost under. What do we do?”',
         tag: 'Your newest hire is the one standing here.',
-        youtubeId: '',
+        youtubeId: 'Exx9guAah4Y', youtubeEnd: 52,
         questions: [
           { q: 'Does every staff member know how to safely shut off shore power to a dock before anyone goes near a sinking boat?',
             action: 'Train every staff member to kill dock shore power before anyone approaches a sinking boat.' },
