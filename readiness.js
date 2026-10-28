@@ -79,7 +79,7 @@
         title: '“He never came back.”',
         line: '“My husband went out fishing this afternoon. He said he’d be back by dark. He’s not answering.”',
         tag: 'It’s dark in 30 minutes.',
-        youtubeId: '',
+        youtubeId: 'GyLT9osvvn0', youtubeEnd: 75,
         questions: [
           { q: 'Do you log when guests or rental boats go out, and when they’re expected back?',
             action: 'Start a simple out / expected-back log for every guest and rental boat.' },
