@@ -102,7 +102,7 @@
         title: '“Storm’s here in 20 minutes.”',
         line: '“Severe thunderstorm warning — 60 mile-an-hour winds, here in 20 minutes. We’ve got eight rentals out and a full beach.”',
         tag: 'Clock starts now.',
-        youtubeId: '',
+        youtubeId: 'BveG1XxudxE', youtubeEnd: 79,
         questions: [
           { q: 'Is one person assigned every day to watch the weather, with alerts that reach them (weather radio, alert app, radar)?',
             action: 'Assign a daily weather watcher, with alerts that actually reach them.' },
@@ -396,7 +396,7 @@
   function videoBlock(s) {
     if (s.youtubeId) {
       return '<div class="dr-video"><iframe src="https://www.youtube-nocookie.com/embed/' + encodeURIComponent(s.youtubeId) +
-        '?rel=0&playsinline=1" title="' + esc(s.title) + '" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>';
+        '?rel=0&playsinline=1&modestbranding=1' + (s.youtubeEnd ? '&end=' + s.youtubeEnd : '') + '" title="' + esc(s.title) + '" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>';
     }
     return '<div class="dr-video dr-video-ph">' +
       '<div class="dr-ph-badge">Video coming soon</div>' +
